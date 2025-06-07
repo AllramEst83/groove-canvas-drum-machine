@@ -1,0 +1,2010 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tone.js Drum Machine</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter Font (from Google Fonts) -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <!-- Font Awesome for Icons -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+    />
+    <style>
+      body {
+        font-family: "Inter", sans-serif;
+        background-color: #1a202c; /* Dark background */
+        color: #e2e8f0; /* Light text */
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+      }
+      .container {
+        max-width: 1200px;
+        margin: auto;
+        padding: 1rem;
+        flex-grow: 1;
+      }
+      .drum-pad {
+        background-color: #2d3748; /* Darker blue-grey */
+        border: 2px solid #4a5568;
+        transition: transform 0.1s ease-in-out,
+          background-color 0.1s ease-in-out;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+      .drum-pad:active {
+        transform: scale(0.95);
+        background-color: #4a5568;
+      }
+      .drum-pad.active {
+        background-color: #48bb78; /* Green for active/playing */
+        border-color: #38a169;
+      }
+      input[type="range"] {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 100%;
+        height: 8px;
+        background: #4a5568;
+        outline: none;
+        opacity: 0.7;
+        transition: opacity 0.2s;
+        border-radius: 4px;
+      }
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 18px;
+        height: 18px;
+        background: #63b3ed; /* Blue thumb */
+        border-radius: 50%;
+        cursor: pointer;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      }
+      input[type="range"]::-moz-range-thumb {
+        width: 18px;
+        height: 18px;
+        background: #63b3ed;
+        border-radius: 50%;
+        cursor: pointer;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      }
+      canvas {
+        background-color: #2d3748;
+        border: 1px solid #4a5568;
+        border-radius: 0.5rem;
+        cursor: crosshair;
+      }
+      .message-box {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background-color: #2d3748;
+        padding: 2rem;
+        border-radius: 0.5rem;
+        box-shadow: 0 10px 15px rgba(0, 0, 0, 0.2);
+        z-index: 1000;
+        display: none; /* Hidden by default */
+      }
+    </style>
+  </head>
+  <body class="antialiased">
+    <!-- Message Box for alerts -->
+    <div id="messageBox" class="message-box">
+      <p id="messageText" class="text-lg mb-4"></p>
+      <button
+        id="closeMessageBox"
+        class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md"
+      >
+        OK
+      </button>
+    </div>
+
+    <header class="bg-gray-800 shadow-lg py-4">
+      <h1 class="text-3xl font-bold text-center text-white">
+        Tone.js Drum Machine
+      </h1>
+    </header>
+
+    <main class="container">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 py-8">
+        <!-- Audio Recording & Editing Section -->
+        <section class="lg:col-span-1 bg-gray-700 p-6 rounded-lg shadow-xl">
+          <h2 class="text-2xl font-semibold mb-4 text-center">
+            Audio Recording & Editing
+          </h2>
+          <div class="space-y-4">
+            <div class="flex flex-wrap justify-center gap-2 mb-4">
+              <button
+                id="recordBtn"
+                class="px-5 py-2 bg-red-500 hover:bg-red-600 text-white rounded-md flex items-center gap-2"
+              >
+                <i class="fas fa-microphone"></i> Record
+              </button>
+              <button
+                id="stopRecordBtn"
+                class="px-5 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-md flex items-center gap-2"
+                disabled
+              >
+                <i class="fas fa-stop"></i> Stop Record
+              </button>
+              <button
+                id="playRecordedBtn"
+                class="px-5 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md flex items-center gap-2"
+                disabled
+              >
+                <i class="fas fa-play"></i> Play Recorded
+              </button>
+            </div>
+
+            <canvas
+              id="waveformCanvas"
+              class="w-full h-40 border border-gray-600 rounded-md"
+            ></canvas>
+            <p class="text-sm text-gray-400 text-center">
+              Drag on waveform to select a trim region.
+            </p>
+
+            <div
+              class="flex flex-col sm:flex-row justify-between items-center gap-4"
+            >
+              <div class="w-full">
+                <label
+                  for="trimStart"
+                  class="block text-sm font-medium text-gray-300"
+                  >Trim Start (<span id="trimStartValue">0.00</span>s)</label
+                >
+                <input
+                  type="range"
+                  id="trimStart"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value="0"
+                  class="w-full"
+                  disabled
+                />
+              </div>
+              <div class="w-full">
+                <label
+                  for="trimEnd"
+                  class="block text-sm font-medium text-gray-300"
+                  >Trim End (<span id="trimEndValue">0.00</span>s)</label
+                >
+                <input
+                  type="range"
+                  id="trimEnd"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value="1"
+                  class="w-full"
+                  disabled
+                />
+              </div>
+            </div>
+            <button
+              id="assignToPadBtn"
+              class="w-full px-5 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-md font-semibold mt-4"
+              disabled
+            >
+              Assign to Pad
+            </button>
+          </div>
+        </section>
+
+        <!-- Drum Pads Section -->
+        <section class="lg:col-span-2 bg-gray-700 p-6 rounded-lg shadow-xl">
+          <h2 class="text-2xl font-semibold mb-4 text-center">Drum Pads</h2>
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+            <!-- Pad Template (repeated for each pad) -->
+            <!-- Pad 1 -->
+            <div class="drum-pad p-4 rounded-lg flex flex-col items-center">
+              <button
+                class="pad-btn bg-green-500 hover:bg-green-600 text-white w-24 h-24 rounded-full text-lg font-bold mb-3 flex items-center justify-center shadow-md transition-colors"
+                data-pad-id="0"
+              >
+                Pad 1
+              </button>
+              <div class="w-full text-center mb-2">
+                <label class="inline-flex items-center">
+                  <input
+                    type="checkbox"
+                    class="loop-toggle form-checkbox h-5 w-5 text-green-600 rounded"
+                    data-pad-id="0"
+                  />
+                  <span class="ml-2 text-gray-300 text-sm">Loop</span>
+                </label>
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Volume (<span id="vol0Value">-6</span>dB)</label
+                >
+                <input
+                  type="range"
+                  class="volume-slider w-full"
+                  min="-40"
+                  max="0"
+                  value="-6"
+                  step="1"
+                  data-pad-id="0"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Speed (<span id="speed0Value">1.00</span>x)</label
+                >
+                <input
+                  type="range"
+                  class="speed-slider w-full"
+                  min="0.25"
+                  max="4"
+                  value="1"
+                  step="0.01"
+                  data-pad-id="0"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Pitch (<span id="pitch0Value">0</span>st)</label
+                >
+                <input
+                  type="range"
+                  class="pitch-slider w-full"
+                  min="-12"
+                  max="12"
+                  value="0"
+                  step="1"
+                  data-pad-id="0"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Echo (<span id="echo0Value">0.00</span>)</label
+                >
+                <input
+                  type="range"
+                  class="echo-slider w-full"
+                  min="0"
+                  max="0.8"
+                  value="0"
+                  step="0.01"
+                  data-pad-id="0"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Reverb (<span id="reverb0Value">0.00</span>)</label
+                >
+                <input
+                  type="range"
+                  class="reverb-slider w-full"
+                  min="0"
+                  max="1"
+                  value="0"
+                  step="0.01"
+                  data-pad-id="0"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >HP Filter (<span id="hp0Value">20</span>Hz)</label
+                >
+                <input
+                  type="range"
+                  class="hp-slider w-full"
+                  min="20"
+                  max="10000"
+                  value="20"
+                  step="10"
+                  data-pad-id="0"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >LP Filter (<span id="lp0Value">20000</span>Hz)</label
+                >
+                <input
+                  type="range"
+                  class="lp-slider w-full"
+                  min="1000"
+                  max="20000"
+                  value="20000"
+                  step="100"
+                  data-pad-id="0"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Distortion (<span id="dist0Value">0.00</span>)</label
+                >
+                <input
+                  type="range"
+                  class="dist-slider w-full"
+                  min="0"
+                  max="1"
+                  value="0"
+                  step="0.01"
+                  data-pad-id="0"
+                />
+              </div>
+            </div>
+            <!-- Pad 2 -->
+            <div class="drum-pad p-4 rounded-lg flex flex-col items-center">
+              <button
+                class="pad-btn bg-green-500 hover:bg-green-600 text-white w-24 h-24 rounded-full text-lg font-bold mb-3 flex items-center justify-center shadow-md transition-colors"
+                data-pad-id="1"
+              >
+                Pad 2
+              </button>
+              <div class="w-full text-center mb-2">
+                <label class="inline-flex items-center">
+                  <input
+                    type="checkbox"
+                    class="loop-toggle form-checkbox h-5 w-5 text-green-600 rounded"
+                    data-pad-id="1"
+                  />
+                  <span class="ml-2 text-gray-300 text-sm">Loop</span>
+                </label>
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Volume (<span id="vol1Value">-6</span>dB)</label
+                >
+                <input
+                  type="range"
+                  class="volume-slider w-full"
+                  min="-40"
+                  max="0"
+                  value="-6"
+                  step="1"
+                  data-pad-id="1"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Speed (<span id="speed1Value">1.00</span>x)</label
+                >
+                <input
+                  type="range"
+                  class="speed-slider w-full"
+                  min="0.25"
+                  max="4"
+                  value="1"
+                  step="0.01"
+                  data-pad-id="1"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Pitch (<span id="pitch1Value">0</span>st)</label
+                >
+                <input
+                  type="range"
+                  class="pitch-slider w-full"
+                  min="-12"
+                  max="12"
+                  value="0"
+                  step="1"
+                  data-pad-id="1"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Echo (<span id="echo1Value">0.00</span>)</label
+                >
+                <input
+                  type="range"
+                  class="echo-slider w-full"
+                  min="0"
+                  max="0.8"
+                  value="0"
+                  step="0.01"
+                  data-pad-id="1"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Reverb (<span id="reverb1Value">0.00</span>)</label
+                >
+                <input
+                  type="range"
+                  class="reverb-slider w-full"
+                  min="0"
+                  max="1"
+                  value="0"
+                  step="0.01"
+                  data-pad-id="1"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >HP Filter (<span id="hp1Value">20</span>Hz)</label
+                >
+                <input
+                  type="range"
+                  class="hp-slider w-full"
+                  min="20"
+                  max="10000"
+                  value="20"
+                  step="10"
+                  data-pad-id="1"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >LP Filter (<span id="lp1Value">20000</span>Hz)</label
+                >
+                <input
+                  type="range"
+                  class="lp-slider w-full"
+                  min="1000"
+                  max="20000"
+                  value="20000"
+                  step="100"
+                  data-pad-id="1"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Distortion (<span id="dist1Value">0.00</span>)</label
+                >
+                <input
+                  type="range"
+                  class="dist-slider w-full"
+                  min="0"
+                  max="1"
+                  value="0"
+                  step="0.01"
+                  data-pad-id="1"
+                />
+              </div>
+            </div>
+            <!-- Pad 3 -->
+            <div class="drum-pad p-4 rounded-lg flex flex-col items-center">
+              <button
+                class="pad-btn bg-green-500 hover:bg-green-600 text-white w-24 h-24 rounded-full text-lg font-bold mb-3 flex items-center justify-center shadow-md transition-colors"
+                data-pad-id="2"
+              >
+                Pad 3
+              </button>
+              <div class="w-full text-center mb-2">
+                <label class="inline-flex items-center">
+                  <input
+                    type="checkbox"
+                    class="loop-toggle form-checkbox h-5 w-5 text-green-600 rounded"
+                    data-pad-id="2"
+                  />
+                  <span class="ml-2 text-gray-300 text-sm">Loop</span>
+                </label>
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Volume (<span id="vol2Value">-6</span>dB)</label
+                >
+                <input
+                  type="range"
+                  class="volume-slider w-full"
+                  min="-40"
+                  max="0"
+                  value="-6"
+                  step="1"
+                  data-pad-id="2"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Speed (<span id="speed2Value">1.00</span>x)</label
+                >
+                <input
+                  type="range"
+                  class="speed-slider w-full"
+                  min="0.25"
+                  max="4"
+                  value="1"
+                  step="0.01"
+                  data-pad-id="2"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Pitch (<span id="pitch2Value">0</span>st)</label
+                >
+                <input
+                  type="range"
+                  class="pitch-slider w-full"
+                  min="-12"
+                  max="12"
+                  value="0"
+                  step="1"
+                  data-pad-id="2"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Echo (<span id="echo2Value">0.00</span>)</label
+                >
+                <input
+                  type="range"
+                  class="echo-slider w-full"
+                  min="0"
+                  max="0.8"
+                  value="0"
+                  step="0.01"
+                  data-pad-id="2"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Reverb (<span id="reverb2Value">0.00</span>)</label
+                >
+                <input
+                  type="range"
+                  class="reverb-slider w-full"
+                  min="0"
+                  max="1"
+                  value="0"
+                  step="0.01"
+                  data-pad-id="2"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >HP Filter (<span id="hp2Value">20</span>Hz)</label
+                >
+                <input
+                  type="range"
+                  class="hp-slider w-full"
+                  min="20"
+                  max="10000"
+                  value="20"
+                  step="10"
+                  data-pad-id="2"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >LP Filter (<span id="lp2Value">20000</span>Hz)</label
+                >
+                <input
+                  type="range"
+                  class="lp-slider w-full"
+                  min="1000"
+                  max="20000"
+                  value="20000"
+                  step="100"
+                  data-pad-id="2"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Distortion (<span id="dist2Value">0.00</span>)</label
+                >
+                <input
+                  type="range"
+                  class="dist-slider w-full"
+                  min="0"
+                  max="1"
+                  value="0"
+                  step="0.01"
+                  data-pad-id="2"
+                />
+              </div>
+            </div>
+            <!-- Pad 4 -->
+            <div class="drum-pad p-4 rounded-lg flex flex-col items-center">
+              <button
+                class="pad-btn bg-green-500 hover:bg-green-600 text-white w-24 h-24 rounded-full text-lg font-bold mb-3 flex items-center justify-center shadow-md transition-colors"
+                data-pad-id="3"
+              >
+                Pad 4
+              </button>
+              <div class="w-full text-center mb-2">
+                <label class="inline-flex items-center">
+                  <input
+                    type="checkbox"
+                    class="loop-toggle form-checkbox h-5 w-5 text-green-600 rounded"
+                    data-pad-id="3"
+                  />
+                  <span class="ml-2 text-gray-300 text-sm">Loop</span>
+                </label>
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Volume (<span id="vol3Value">-6</span>dB)</label
+                >
+                <input
+                  type="range"
+                  class="volume-slider w-full"
+                  min="-40"
+                  max="0"
+                  value="-6"
+                  step="1"
+                  data-pad-id="3"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Speed (<span id="speed3Value">1.00</span>x)</label
+                >
+                <input
+                  type="range"
+                  class="speed-slider w-full"
+                  min="0.25"
+                  max="4"
+                  value="1"
+                  step="0.01"
+                  data-pad-id="3"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Pitch (<span id="pitch3Value">0</span>st)</label
+                >
+                <input
+                  type="range"
+                  class="pitch-slider w-full"
+                  min="-12"
+                  max="12"
+                  value="0"
+                  step="1"
+                  data-pad-id="3"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Echo (<span id="echo3Value">0.00</span>)</label
+                >
+                <input
+                  type="range"
+                  class="echo-slider w-full"
+                  min="0"
+                  max="0.8"
+                  value="0"
+                  step="0.01"
+                  data-pad-id="3"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Reverb (<span id="reverb3Value">0.00</span>)</label
+                >
+                <input
+                  type="range"
+                  class="reverb-slider w-full"
+                  min="0"
+                  max="1"
+                  value="0"
+                  step="0.01"
+                  data-pad-id="3"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >HP Filter (<span id="hp3Value">20</span>Hz)</label
+                >
+                <input
+                  type="range"
+                  class="hp-slider w-full"
+                  min="20"
+                  max="10000"
+                  value="20"
+                  step="10"
+                  data-pad-id="3"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >LP Filter (<span id="lp3Value">20000</span>Hz)</label
+                >
+                <input
+                  type="range"
+                  class="lp-slider w-full"
+                  min="1000"
+                  max="20000"
+                  value="20000"
+                  step="100"
+                  data-pad-id="3"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Distortion (<span id="dist3Value">0.00</span>)</label
+                >
+                <input
+                  type="range"
+                  class="dist-slider w-full"
+                  min="0"
+                  max="1"
+                  value="0"
+                  step="0.01"
+                  data-pad-id="3"
+                />
+              </div>
+            </div>
+            <!-- Pad 5 -->
+            <div class="drum-pad p-4 rounded-lg flex flex-col items-center">
+              <button
+                class="pad-btn bg-green-500 hover:bg-green-600 text-white w-24 h-24 rounded-full text-lg font-bold mb-3 flex items-center justify-center shadow-md transition-colors"
+                data-pad-id="4"
+              >
+                Pad 5
+              </button>
+              <div class="w-full text-center mb-2">
+                <label class="inline-flex items-center">
+                  <input
+                    type="checkbox"
+                    class="loop-toggle form-checkbox h-5 w-5 text-green-600 rounded"
+                    data-pad-id="4"
+                  />
+                  <span class="ml-2 text-gray-300 text-sm">Loop</span>
+                </label>
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Volume (<span id="vol4Value">-6</span>dB)</label
+                >
+                <input
+                  type="range"
+                  class="volume-slider w-full"
+                  min="-40"
+                  max="0"
+                  value="-6"
+                  step="1"
+                  data-pad-id="4"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Speed (<span id="speed4Value">1.00</span>x)</label
+                >
+                <input
+                  type="range"
+                  class="speed-slider w-full"
+                  min="0.25"
+                  max="4"
+                  value="1"
+                  step="0.01"
+                  data-pad-id="4"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Pitch (<span id="pitch4Value">0</span>st)</label
+                >
+                <input
+                  type="range"
+                  class="pitch-slider w-full"
+                  min="-12"
+                  max="12"
+                  value="0"
+                  step="1"
+                  data-pad-id="4"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Echo (<span id="echo4Value">0.00</span>)</label
+                >
+                <input
+                  type="range"
+                  class="echo-slider w-full"
+                  min="0"
+                  max="0.8"
+                  value="0"
+                  step="0.01"
+                  data-pad-id="4"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Reverb (<span id="reverb4Value">0.00</span>)</label
+                >
+                <input
+                  type="range"
+                  class="reverb-slider w-full"
+                  min="0"
+                  max="1"
+                  value="0"
+                  step="0.01"
+                  data-pad-id="4"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >HP Filter (<span id="hp4Value">20</span>Hz)</label
+                >
+                <input
+                  type="range"
+                  class="hp-slider w-full"
+                  min="20"
+                  max="10000"
+                  value="20"
+                  step="10"
+                  data-pad-id="4"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >LP Filter (<span id="lp4Value">20000</span>Hz)</label
+                >
+                <input
+                  type="range"
+                  class="lp-slider w-full"
+                  min="1000"
+                  max="20000"
+                  value="20000"
+                  step="100"
+                  data-pad-id="4"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Distortion (<span id="dist4Value">0.00</span>)</label
+                >
+                <input
+                  type="range"
+                  class="dist-slider w-full"
+                  min="0"
+                  max="1"
+                  value="0"
+                  step="0.01"
+                  data-pad-id="4"
+                />
+              </div>
+            </div>
+            <!-- Pad 6 -->
+            <div class="drum-pad p-4 rounded-lg flex flex-col items-center">
+              <button
+                class="pad-btn bg-green-500 hover:bg-green-600 text-white w-24 h-24 rounded-full text-lg font-bold mb-3 flex items-center justify-center shadow-md transition-colors"
+                data-pad-id="5"
+              >
+                Pad 6
+              </button>
+              <div class="w-full text-center mb-2">
+                <label class="inline-flex items-center">
+                  <input
+                    type="checkbox"
+                    class="loop-toggle form-checkbox h-5 w-5 text-green-600 rounded"
+                    data-pad-id="5"
+                  />
+                  <span class="ml-2 text-gray-300 text-sm">Loop</span>
+                </label>
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Volume (<span id="vol5Value">-6</span>dB)</label
+                >
+                <input
+                  type="range"
+                  class="volume-slider w-full"
+                  min="-40"
+                  max="0"
+                  value="-6"
+                  step="1"
+                  data-pad-id="5"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Speed (<span id="speed5Value">1.00</span>x)</label
+                >
+                <input
+                  type="range"
+                  class="speed-slider w-full"
+                  min="0.25"
+                  max="4"
+                  value="1"
+                  step="0.01"
+                  data-pad-id="5"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Pitch (<span id="pitch5Value">0</span>st)</label
+                >
+                <input
+                  type="range"
+                  class="pitch-slider w-full"
+                  min="-12"
+                  max="12"
+                  value="0"
+                  step="1"
+                  data-pad-id="5"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Echo (<span id="echo5Value">0.00</span>)</label
+                >
+                <input
+                  type="range"
+                  class="echo-slider w-full"
+                  min="0"
+                  max="0.8"
+                  value="0"
+                  step="0.01"
+                  data-pad-id="5"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Reverb (<span id="reverb5Value">0.00</span>)</label
+                >
+                <input
+                  type="range"
+                  class="reverb-slider w-full"
+                  min="0"
+                  max="1"
+                  value="0"
+                  step="0.01"
+                  data-pad-id="5"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >HP Filter (<span id="hp5Value">20</span>Hz)</label
+                >
+                <input
+                  type="range"
+                  class="hp-slider w-full"
+                  min="20"
+                  max="10000"
+                  value="20"
+                  step="10"
+                  data-pad-id="5"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >LP Filter (<span id="lp5Value">20000</span>Hz)</label
+                >
+                <input
+                  type="range"
+                  class="lp-slider w-full"
+                  min="1000"
+                  max="20000"
+                  value="20000"
+                  step="100"
+                  data-pad-id="5"
+                />
+              </div>
+              <div class="w-full mb-2">
+                <label class="block text-sm font-medium text-gray-300"
+                  >Distortion (<span id="dist5Value">0.00</span>)</label
+                >
+                <input
+                  type="range"
+                  class="dist-slider w-full"
+                  min="0"
+                  max="1"
+                  value="0"
+                  step="0.01"
+                  data-pad-id="5"
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Global Controls Section -->
+        <section
+          class="lg:col-span-3 bg-gray-700 p-6 rounded-lg shadow-xl mt-8"
+        >
+          <h2 class="text-2xl font-semibold mb-4 text-center">
+            Global Controls
+          </h2>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Master BPM -->
+            <div class="flex flex-col items-center">
+              <label
+                for="masterBPM"
+                class="block text-lg font-medium text-gray-300 mb-2"
+                >Master BPM (<span id="masterBPMValue">120</span>)</label
+              >
+              <input
+                type="range"
+                id="masterBPM"
+                min="60"
+                max="200"
+                value="120"
+                step="1"
+                class="w-3/4"
+              />
+              <div class="mt-3">
+                <label class="inline-flex items-center">
+                  <input
+                    type="checkbox"
+                    id="masterBPMSyncToggle"
+                    class="form-checkbox h-5 w-5 text-blue-600 rounded"
+                    checked
+                  />
+                  <span class="ml-2 text-gray-300"
+                    >Sync Pads to Master BPM</span
+                  >
+                </label>
+              </div>
+            </div>
+            <!-- Master Recorder -->
+            <div class="flex flex-col items-center">
+              <h3 class="text-lg font-medium text-gray-300 mb-2">
+                Master Recording
+              </h3>
+              <div class="flex flex-wrap justify-center gap-3 mb-4">
+                <button
+                  id="masterRecordBtn"
+                  class="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md flex items-center gap-2"
+                >
+                  <i class="fas fa-dot-circle"></i> Record Master
+                </button>
+                <button
+                  id="masterStopRecordBtn"
+                  class="px-5 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md flex items-center gap-2"
+                  disabled
+                >
+                  <i class="fas fa-stop"></i> Stop Master Record
+                </button>
+              </div>
+              <div class="flex flex-wrap justify-center gap-3">
+                <button
+                  id="masterPlayBtn"
+                  class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md flex items-center gap-2"
+                  disabled
+                >
+                  <i class="fas fa-play"></i> Play Master
+                </button>
+                <button
+                  id="masterStopBtn"
+                  class="px-5 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-md flex items-center gap-2"
+                  disabled
+                >
+                  <i class="fas fa-pause"></i> Stop Master Playback
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="flex justify-center mt-8">
+            <button
+              id="masterResetBtn"
+              class="px-8 py-3 bg-red-700 hover:bg-red-800 text-white rounded-md text-lg font-semibold flex items-center gap-2"
+            >
+              <i class="fas fa-undo"></i> Master Reset
+            </button>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <footer class="bg-gray-800 py-4 text-center text-gray-400 text-sm">
+      <p>&copy; 2024 Tone.js Drum Machine. All rights reserved.</p>
+    </footer>
+
+    <!-- Tone.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+
+    <script>
+      // Function to display messages in a custom modal instead of alert()
+      function showMessage(message) {
+        const messageBox = document.getElementById("messageBox");
+        const messageText = document.getElementById("messageText");
+        messageText.textContent = message;
+        messageBox.style.display = "block";
+      }
+
+      document
+        .getElementById("closeMessageBox")
+        .addEventListener("click", () => {
+          document.getElementById("messageBox").style.display = "none";
+        });
+
+      // Initialize Tone.js
+      let initialized = false;
+      async function initializeAudio() {
+        if (!initialized) {
+          try {
+            await Tone.start();
+            console.log("AudioContext is running");
+            initialized = true;
+            // Generate all reverbs on initial audio context start
+            await Promise.all(padReverbs.map((reverb) => reverb.generate()));
+            console.log("All reverbs generated.");
+          } catch (e) {
+            console.error("Error starting audio context:", e);
+            showMessage(
+              "Error starting audio. Please allow microphone access and try again."
+            );
+          }
+        }
+      }
+
+      // --- Global Variables ---
+      const NUM_PADS = 6;
+      const padPlayers = []; // Array to hold Tone.Player instances for each pad
+      const padBuffers = Array(NUM_PADS).fill(null); // Array to hold AudioBuffer for each pad
+      const padVolumes = []; // Array to hold Tone.Gain nodes for individual pad volume
+      const padPitchShifts = [];
+      const padFeedbackDelays = [];
+      const padReverbs = [];
+      const padHighPassFilters = [];
+      const padLowPassFilters = [];
+      const padDistortions = [];
+
+      let mediaRecorder;
+      let recordedChunks = [];
+      let recordedAudioBuffer = null; // Stores the AudioBuffer of the initially recorded clip
+      let trimmedAudioBuffer = null; // Stores the AudioBuffer of the trimmed clip
+
+      let waveformCanvas;
+      let waveformCtx;
+      let isDragging = false;
+      let selectionStart = 0; // In normalized canvas coordinates (0-1)
+      let selectionEnd = 1; // In normalized canvas coordinates (0-1)
+
+      let masterRecorder = null;
+      let masterRecordedBlob = null;
+      let masterRecordedPlayer = null;
+
+      // --- DOM Elements ---
+      const recordBtn = document.getElementById("recordBtn");
+      const stopRecordBtn = document.getElementById("stopRecordBtn");
+      const playRecordedBtn = document.getElementById("playRecordedBtn");
+      const waveformCanvasElement = document.getElementById("waveformCanvas");
+      const trimStartInput = document.getElementById("trimStart");
+      const trimEndInput = document.getElementById("trimEnd");
+      const trimStartValueSpan = document.getElementById("trimStartValue");
+      const trimEndValueSpan = document.getElementById("trimEndValue");
+      const assignToPadBtn = document.getElementById("assignToPadBtn");
+      const padButtons = document.querySelectorAll(".pad-btn");
+      const loopToggles = document.querySelectorAll(".loop-toggle");
+      const volumeSliders = document.querySelectorAll(".volume-slider");
+      const speedSliders = document.querySelectorAll(".speed-slider");
+      // New effect sliders and value displays
+      const pitchSliders = document.querySelectorAll(".pitch-slider");
+      const echoSliders = document.querySelectorAll(".echo-slider");
+      const reverbSliders = document.querySelectorAll(".reverb-slider");
+      const hpSliders = document.querySelectorAll(".hp-slider");
+      const lpSliders = document.querySelectorAll(".lp-slider");
+      const distSliders = document.querySelectorAll(".dist-slider");
+
+      const masterBPMInput = document.getElementById("masterBPM");
+      const masterBPMValueSpan = document.getElementById("masterBPMValue");
+      const masterBPMSyncToggle = document.getElementById(
+        "masterBPMSyncToggle"
+      );
+      const masterRecordBtn = document.getElementById("masterRecordBtn");
+      const masterStopRecordBtn = document.getElementById(
+        "masterStopRecordBtn"
+      );
+      const masterPlayBtn = document.getElementById("masterPlayBtn");
+      const masterStopBtn = document.getElementById("masterStopBtn");
+      const masterResetBtn = document.getElementById("masterResetBtn");
+
+      // --- Setup Tone.js Players and Effects for Pads ---
+      function setupPadAudioNodes() {
+        for (let i = 0; i < NUM_PADS; i++) {
+          const player = new Tone.Player(); // Player will be connected to effects
+
+          // Individual effect nodes for each pad
+          const pitchShift = new Tone.PitchShift({ pitch: 0 });
+          const highPass = new Tone.Filter(20, "highpass"); // Default 20Hz
+          const lowPass = new Tone.Filter(20000, "lowpass"); // Default 20000Hz
+          const distortion = new Tone.Distortion(0); // Default 0 (no distortion)
+          // FeedbackDelay: delayTime can be tempo-synced (e.g., '8n'), feedback is the amount
+          const feedbackDelay = new Tone.FeedbackDelay({
+            delayTime: "8n",
+            feedback: 0,
+          }); // Default 0 feedback
+          // Reverb: preDelay for initial delay, decay for length. Wet is the mix.
+          const reverb = new Tone.Reverb({ decay: 1.5, preDelay: 0.01 }).set({
+            wet: 0,
+          }); // Default 0 wet (dry)
+
+          // Dedicated Gain node for individual pad volume
+          const padGain = new Tone.Gain(Tone.dbToGain(-6)); // Default -6dB
+
+          // Chain the effects: Player -> Pitch -> HPF -> LPF -> Distortion -> Delay -> Reverb -> Gain -> Master
+          player.chain(
+            pitchShift,
+            highPass,
+            lowPass,
+            distortion,
+            feedbackDelay,
+            reverb,
+            padGain
+          );
+          padGain.toDestination(); // Connect the final output of this pad's chain to the master output
+
+          // Store references
+          padPlayers.push(player);
+          padPitchShifts.push(pitchShift);
+          padHighPassFilters.push(highPass);
+          padLowPassFilters.push(lowPass);
+          padDistortions.push(distortion);
+          padFeedbackDelays.push(feedbackDelay);
+          padReverbs.push(reverb);
+          padVolumes.push(padGain); // Store the Gain node for volume control
+
+          // Set up player's onstop callback for visual feedback
+          player.onstop = () => {
+            const padButton = document.querySelector(
+              `.pad-btn[data-pad-id="${i}"]`
+            );
+            if (padButton) {
+              padButton.classList.remove("active");
+            }
+          };
+        }
+      }
+
+      // --- Audio Recording Section Logic ---
+
+      // Initialize canvas context and event listeners
+      waveformCanvas = waveformCanvasElement;
+      waveformCtx = waveformCanvas.getContext("2d");
+      const dpr = window.devicePixelRatio || 1;
+      waveformCanvas.width = waveformCanvas.offsetWidth * dpr;
+      waveformCanvas.height = waveformCanvas.offsetHeight * dpr;
+      waveformCtx.scale(dpr, dpr);
+
+      function drawWaveform(buffer, startNorm = 0, endNorm = 1) {
+        waveformCtx.clearRect(
+          0,
+          0,
+          waveformCanvas.offsetWidth,
+          waveformCanvas.offsetHeight
+        );
+        if (!buffer) return;
+
+        const data = buffer.getChannelData(0);
+        const width = waveformCanvas.offsetWidth;
+        const height = waveformCanvas.offsetHeight;
+        const step = Math.ceil(data.length / width);
+        const amp = height / 2;
+
+        waveformCtx.beginPath();
+        waveformCtx.strokeStyle = "#63b3ed"; // Blue waveform
+        waveformCtx.lineWidth = 1;
+
+        for (let i = 0; i < width; i++) {
+          let min = 1.0;
+          let max = -1.0;
+          const sampleStart = Math.floor(i * step);
+          const sampleEnd = Math.min(sampleStart + step, data.length);
+          for (let j = sampleStart; j < sampleEnd; j++) {
+            const s = data[j];
+            if (s < min) min = s;
+            if (s > max) max = s;
+          }
+          waveformCtx.lineTo(i, (1 + min * 0.5) * amp);
+          waveformCtx.lineTo(i, (1 + max * 0.5) * amp);
+        }
+        waveformCtx.stroke();
+
+        // Draw selection rectangle
+        const selectionPixelStart = startNorm * width;
+        const selectionPixelEnd = endNorm * width;
+        waveformCtx.fillStyle = "rgba(255, 255, 255, 0.2)"; // Semi-transparent white
+        waveformCtx.fillRect(
+          selectionPixelStart,
+          0,
+          selectionPixelEnd - selectionPixelStart,
+          height
+        );
+
+        waveformCtx.strokeStyle = "#a0aec0"; // Light gray border
+        waveformCtx.lineWidth = 2;
+        waveformCtx.strokeRect(
+          selectionPixelStart,
+          0,
+          selectionPixelEnd - selectionPixelStart,
+          height
+        );
+      }
+
+      // Event listeners for waveform trimming (mouse and touch)
+      const addWaveformEventListeners = () => {
+        waveformCanvas.addEventListener("mousedown", handleWaveformStart);
+        waveformCanvas.addEventListener("mousemove", handleWaveformMove);
+        waveformCanvas.addEventListener("mouseup", handleWaveformEnd);
+        waveformCanvas.addEventListener("touchstart", handleWaveformStart);
+        waveformCanvas.addEventListener("touchmove", handleWaveformMove);
+        waveformCanvas.addEventListener("touchend", handleWaveformEnd);
+      };
+
+      const getEventX = (e) => {
+        const rect = waveformCanvas.getBoundingClientRect();
+        if (e.touches && e.touches.length > 0) {
+          return (e.touches[0].clientX - rect.left) / rect.width;
+        }
+        return (e.clientX - rect.left) / rect.width;
+      };
+
+      const handleWaveformStart = (e) => {
+        if (!recordedAudioBuffer) return;
+        isDragging = true;
+        const clickX = getEventX(e);
+        selectionStart = clickX;
+        selectionEnd = clickX;
+        trimStartInput.value = clickX;
+        trimEndInput.value = clickX;
+        trimStartValueSpan.textContent = (
+          clickX * recordedAudioBuffer.duration
+        ).toFixed(2);
+        trimEndValueSpan.textContent = (
+          clickX * recordedAudioBuffer.duration
+        ).toFixed(2);
+        drawWaveform(recordedAudioBuffer, selectionStart, selectionEnd);
+        e.preventDefault(); // Prevent scrolling on touch
+      };
+
+      const handleWaveformMove = (e) => {
+        if (!isDragging || !recordedAudioBuffer) return;
+        const currentX = getEventX(e);
+        selectionEnd = currentX;
+
+        const startVal = Math.min(selectionStart, selectionEnd);
+        const endVal = Math.max(selectionStart, selectionEnd);
+        trimStartInput.value = startVal;
+        trimEndInput.value = endVal;
+        trimStartValueSpan.textContent = (
+          startVal * recordedAudioBuffer.duration
+        ).toFixed(2);
+        trimEndValueSpan.textContent = (
+          endVal * recordedAudioBuffer.duration
+        ).toFixed(2);
+
+        drawWaveform(recordedAudioBuffer, startVal, endVal);
+        e.preventDefault(); // Prevent scrolling on touch
+      };
+
+      const handleWaveformEnd = () => {
+        isDragging = false;
+        if (recordedAudioBuffer) {
+          const startVal = Math.min(
+            parseFloat(trimStartInput.value),
+            parseFloat(trimEndInput.value)
+          );
+          const endVal = Math.max(
+            parseFloat(trimStartInput.value),
+            parseFloat(trimEndInput.value)
+          );
+          trimStartInput.value = startVal;
+          trimEndInput.value = endVal;
+          selectionStart = startVal;
+          selectionEnd = endVal;
+          drawWaveform(recordedAudioBuffer, selectionStart, selectionEnd);
+          applyTrim();
+        }
+      };
+
+      recordBtn.addEventListener("click", async () => {
+        await initializeAudio(); // Ensure audio context is running
+
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+          });
+          mediaRecorder = new MediaRecorder(stream);
+          recordedChunks = [];
+
+          mediaRecorder.ondataavailable = (event) => {
+            recordedChunks.push(event.data);
+          };
+
+          mediaRecorder.onstop = async () => {
+            const audioBlob = new Blob(recordedChunks, { type: "audio/webm" });
+            const arrayBuffer = await audioBlob.arrayBuffer();
+            const audioContext = Tone.getContext().rawContext; // Use Tone's AudioContext
+            recordedAudioBuffer = await audioContext.decodeAudioData(
+              arrayBuffer
+            );
+
+            // Reset trim sliders and redraw waveform
+            selectionStart = 0;
+            selectionEnd = 1;
+            trimStartInput.value = 0;
+            trimEndInput.value = 1;
+            trimStartInput.max = 1;
+            trimEndInput.max = 1;
+            trimStartInput.disabled = false;
+            trimEndInput.disabled = false;
+            trimStartValueSpan.textContent = (0).toFixed(2);
+            trimEndValueSpan.textContent =
+              recordedAudioBuffer.duration.toFixed(2); // Initial end is total duration
+            drawWaveform(recordedAudioBuffer);
+            playRecordedBtn.disabled = false;
+            assignToPadBtn.disabled = false;
+            stream.getTracks().forEach((track) => track.stop()); // Stop the microphone stream
+            showMessage("Audio recorded successfully!");
+          };
+
+          mediaRecorder.start();
+          recordBtn.disabled = true;
+          stopRecordBtn.disabled = false;
+          playRecordedBtn.disabled = true;
+          assignToPadBtn.disabled = true; // Disable assign until stop and decode
+          showMessage("Recording audio...");
+        } catch (err) {
+          console.error("Error accessing microphone:", err);
+          showMessage(
+            "Failed to access microphone. Please ensure permissions are granted."
+          );
+        }
+      });
+
+      stopRecordBtn.addEventListener("click", () => {
+        if (mediaRecorder && mediaRecorder.state !== "inactive") {
+          mediaRecorder.stop();
+          recordBtn.disabled = false;
+          stopRecordBtn.disabled = true;
+          showMessage("Recording stopped. Decoding audio...");
+        }
+      });
+
+      playRecordedBtn.addEventListener("click", () => {
+        if (trimmedAudioBuffer) {
+          // Play the trimmed audio through a temporary player
+          const tempPlayer = new Tone.Player(
+            trimmedAudioBuffer
+          ).toDestination();
+          tempPlayer.start();
+          tempPlayer.onstop = () => tempPlayer.dispose(); // Clean up player after playback
+          showMessage("Playing trimmed audio...");
+        } else if (recordedAudioBuffer) {
+          // Fallback if no trim applied yet, play full recorded audio
+          const tempPlayer = new Tone.Player(
+            recordedAudioBuffer
+          ).toDestination();
+          tempPlayer.start();
+          tempPlayer.onstop = () => tempPlayer.dispose();
+          showMessage("Playing recorded audio (full length)...");
+        } else {
+          showMessage("No audio recorded yet.");
+        }
+      });
+
+      function applyTrim() {
+        if (!recordedAudioBuffer) {
+          trimmedAudioBuffer = null;
+          return;
+        }
+
+        const duration = recordedAudioBuffer.duration;
+        const startNorm = parseFloat(trimStartInput.value);
+        const endNorm = parseFloat(trimEndInput.value);
+
+        const startSec = startNorm * duration;
+        const endSec = endNorm * duration;
+
+        if (endSec <= startSec) {
+          // Invalid trim, use the whole buffer if recorded, otherwise null
+          trimmedAudioBuffer = recordedAudioBuffer;
+          trimStartValueSpan.textContent = (0).toFixed(2);
+          trimEndValueSpan.textContent = duration.toFixed(2);
+          return;
+        }
+
+        const audioContext = Tone.getContext().rawContext;
+        const numberOfChannels = recordedAudioBuffer.numberOfChannels;
+        const sampleRate = recordedAudioBuffer.sampleRate;
+        const startFrame = Math.floor(startSec * sampleRate);
+        const endFrame = Math.floor(endSec * sampleRate);
+        const frameLength = endFrame - startFrame;
+
+        trimmedAudioBuffer = audioContext.createBuffer(
+          numberOfChannels,
+          frameLength,
+          sampleRate
+        );
+
+        for (let channel = 0; channel < numberOfChannels; channel++) {
+          const originalChannelData =
+            recordedAudioBuffer.getChannelData(channel);
+          const newChannelData = trimmedAudioBuffer.getChannelData(channel);
+          for (let i = 0; i < frameLength; i++) {
+            newChannelData[i] = originalChannelData[startFrame + i];
+          }
+        }
+        // Update the display for the trimmed values, which are in seconds
+        trimStartValueSpan.textContent = startSec.toFixed(2);
+        trimEndValueSpan.textContent = endSec.toFixed(2);
+      }
+
+      trimStartInput.addEventListener("input", () => {
+        const startVal = parseFloat(trimStartInput.value);
+        const endVal = parseFloat(trimEndInput.value);
+        if (startVal > endVal) {
+          trimEndInput.value = startVal;
+        }
+        selectionStart = parseFloat(trimStartInput.value);
+        selectionEnd = parseFloat(trimEndInput.value);
+        drawWaveform(recordedAudioBuffer, selectionStart, selectionEnd);
+        applyTrim();
+      });
+
+      trimEndInput.addEventListener("input", () => {
+        const startVal = parseFloat(trimStartInput.value);
+        const endVal = parseFloat(trimEndInput.value);
+        if (endVal < startVal) {
+          trimStartInput.value = endVal;
+        }
+        selectionStart = parseFloat(trimStartInput.value);
+        selectionEnd = parseFloat(trimEndInput.value);
+        drawWaveform(recordedAudioBuffer, selectionStart, selectionEnd);
+        applyTrim();
+      });
+
+      assignToPadBtn.addEventListener("click", () => {
+        if (!trimmedAudioBuffer) {
+          showMessage("Please record and trim audio first.");
+          return;
+        }
+
+        showMessage("Click on a drum pad to assign the audio.");
+        let assigning = true;
+        const assignListener = (e) => {
+          if (assigning) {
+            const padId = parseInt(e.target.dataset.padId);
+            if (!isNaN(padId) && padId >= 0 && padId < NUM_PADS) {
+              padPlayers[padId].buffer = trimmedAudioBuffer;
+              padBuffers[padId] = trimmedAudioBuffer; // Store the buffer
+              e.target.textContent = `Pad ${padId + 1} (Assigned)`;
+              e.target.classList.remove("bg-green-500", "hover:bg-green-600");
+              e.target.classList.add("bg-blue-500", "hover:bg-blue-600");
+              showMessage(`Audio assigned to Pad ${padId + 1}!`);
+              assigning = false; // Stop assigning mode
+            }
+            padButtons.forEach((btn) =>
+              btn.removeEventListener("click", assignListener)
+            ); // Remove listener
+          }
+        };
+        // Add event listener to each pad button for assignment
+        padButtons.forEach((btn) =>
+          btn.addEventListener("click", assignListener, { once: true })
+        );
+      });
+
+      // --- Drum Pad Controls Logic ---
+      padButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          const padId = parseInt(button.dataset.padId);
+          const player = padPlayers[padId];
+          if (player.buffer.duration > 0) {
+            // Stop if already playing (unless looping) and restart
+            if (player.state === "started" && !player.loop) {
+              player.stop();
+            }
+            player.start();
+            button.classList.add("active"); // Add active class
+          } else {
+            showMessage(`Pad ${padId + 1} has no audio assigned.`);
+          }
+        });
+      });
+
+      loopToggles.forEach((toggle) => {
+        toggle.addEventListener("change", (e) => {
+          const padId = parseInt(e.target.dataset.padId);
+          padPlayers[padId].loop = e.target.checked;
+          if (
+            e.target.checked &&
+            padPlayers[padId].buffer.duration > 0 &&
+            padPlayers[padId].state !== "started"
+          ) {
+            // Start looping if enabled and not already playing
+            padPlayers[padId].start();
+            document
+              .querySelector(`.pad-btn[data-pad-id="${padId}"]`)
+              .classList.add("active");
+          } else if (
+            !e.target.checked &&
+            padPlayers[padId].state === "started"
+          ) {
+            // Stop if no longer looping
+            padPlayers[padId].stop();
+          }
+        });
+      });
+
+      volumeSliders.forEach((slider) => {
+        slider.addEventListener("input", (e) => {
+          const padId = parseInt(e.target.dataset.padId);
+          // Control the gain node created specifically for pad volume
+          padVolumes[padId].gain.value = Tone.dbToGain(
+            parseFloat(e.target.value)
+          );
+          document.getElementById(`vol${padId}Value`).textContent = parseFloat(
+            e.target.value
+          ).toFixed(0);
+        });
+      });
+
+      // Function to update pad speed based on master sync or individual slider
+      function updatePadSpeed(padId) {
+        const player = padPlayers[padId];
+        const speedSlider = document.querySelector(
+          `.speed-slider[data-pad-id="${padId}"]`
+        );
+        const speedValueSpan = document.getElementById(`speed${padId}Value`);
+
+        if (masterBPMSyncToggle.checked) {
+          // Calculate playbackRate based on master BPM relative to default (120)
+          const bpm = parseFloat(masterBPMInput.value);
+          const referenceBPM = 120;
+          player.playbackRate = bpm / referenceBPM;
+          speedSlider.disabled = true;
+          speedSlider.value = player.playbackRate; // Visually update slider
+          speedValueSpan.textContent = player.playbackRate.toFixed(2);
+        } else {
+          // If master sync is off, use individual slider value
+          speedSlider.disabled = false;
+          player.playbackRate = parseFloat(speedSlider.value);
+          speedValueSpan.textContent = parseFloat(speedSlider.value).toFixed(2);
+        }
+      }
+
+      speedSliders.forEach((slider) => {
+        slider.addEventListener("input", (e) => {
+          const padId = parseInt(e.target.dataset.padId);
+          updatePadSpeed(padId); // Update speed immediately
+        });
+      });
+
+      // --- New Effect Sliders Event Listeners ---
+      pitchSliders.forEach((slider) => {
+        slider.addEventListener("input", (e) => {
+          const padId = parseInt(e.target.dataset.padId);
+          padPitchShifts[padId].pitch = parseFloat(e.target.value);
+          document.getElementById(`pitch${padId}Value`).textContent =
+            parseFloat(e.target.value).toFixed(0);
+        });
+      });
+
+      echoSliders.forEach((slider) => {
+        slider.addEventListener("input", (e) => {
+          const padId = parseInt(e.target.dataset.padId);
+          padFeedbackDelays[padId].feedback.value = parseFloat(e.target.value);
+          document.getElementById(`echo${padId}Value`).textContent = parseFloat(
+            e.target.value
+          ).toFixed(2);
+        });
+      });
+
+      reverbSliders.forEach((slider) => {
+        slider.addEventListener("input", (e) => {
+          const padId = parseInt(e.target.dataset.padId);
+          padReverbs[padId].wet.value = parseFloat(e.target.value);
+          document.getElementById(`reverb${padId}Value`).textContent =
+            parseFloat(e.target.value).toFixed(2);
+        });
+      });
+
+      hpSliders.forEach((slider) => {
+        slider.addEventListener("input", (e) => {
+          const padId = parseInt(e.target.dataset.padId);
+          padHighPassFilters[padId].frequency.value = parseFloat(
+            e.target.value
+          );
+          document.getElementById(`hp${padId}Value`).textContent = parseFloat(
+            e.target.value
+          ).toFixed(0);
+        });
+      });
+
+      lpSliders.forEach((slider) => {
+        slider.addEventListener("input", (e) => {
+          const padId = parseInt(e.target.dataset.padId);
+          padLowPassFilters[padId].frequency.value = parseFloat(e.target.value);
+          document.getElementById(`lp${padId}Value`).textContent = parseFloat(
+            e.target.value
+          ).toFixed(0);
+        });
+      });
+
+      distSliders.forEach((slider) => {
+        slider.addEventListener("input", (e) => {
+          const padId = parseInt(e.target.dataset.padId);
+          padDistortions[padId].distortion = parseFloat(e.target.value);
+          document.getElementById(`dist${padId}Value`).textContent = parseFloat(
+            e.target.value
+          ).toFixed(2);
+        });
+      });
+
+      // --- Global Controls Logic ---
+      masterBPMInput.addEventListener("input", (e) => {
+        const newBPM = parseFloat(e.target.value);
+        Tone.Transport.bpm.value = newBPM;
+        masterBPMValueSpan.textContent = newBPM;
+        // If sync is enabled, update all pad speeds in real-time
+        if (masterBPMSyncToggle.checked) {
+          for (let i = 0; i < NUM_PADS; i++) {
+            updatePadSpeed(i);
+          }
+        }
+      });
+
+      masterBPMSyncToggle.addEventListener("change", (e) => {
+        // When sync is toggled, re-evaluate all pad speeds
+        for (let i = 0; i < NUM_PADS; i++) {
+          updatePadSpeed(i);
+        }
+      });
+
+      masterRecordBtn.addEventListener("click", async () => {
+        await initializeAudio(); // Ensure audio context is running
+
+        if (!masterRecorder) {
+          masterRecorder = new Tone.Recorder();
+          // Connect master output to recorder
+          Tone.Master.connect(masterRecorder);
+        }
+
+        try {
+          // Start Tone.Transport and then the recorder
+          // Tone.Transport must be running for scheduling
+          Tone.Transport.start();
+          masterRecorder.start();
+          masterRecordBtn.disabled = true;
+          masterStopRecordBtn.disabled = false;
+          masterPlayBtn.disabled = true; // Disable play until recording stops
+          masterStopBtn.disabled = true;
+          showMessage("Master recording started...");
+        } catch (error) {
+          console.error("Error starting master recording:", error);
+          showMessage("Failed to start master recording.");
+        }
+      });
+
+      masterStopRecordBtn.addEventListener("click", async () => {
+        if (masterRecorder) {
+          try {
+            Tone.Transport.stop(); // Stop the transport
+            const recording = await masterRecorder.stop();
+            masterRecordedBlob = recording;
+
+            const url = URL.createObjectURL(masterRecordedBlob);
+            // Create a Tone.Player for the master recording
+            if (masterRecordedPlayer) {
+              masterRecordedPlayer.dispose();
+            }
+            masterRecordedPlayer = new Tone.Player(url).toDestination();
+
+            masterRecordBtn.disabled = false;
+            masterStopRecordBtn.disabled = true;
+            masterPlayBtn.disabled = false;
+            showMessage("Master recording stopped and ready for playback!");
+          } catch (error) {
+            console.error("Error stopping master recording:", error);
+            showMessage("Failed to stop master recording.");
+          }
+        }
+      });
+
+      masterPlayBtn.addEventListener("click", () => {
+        if (masterRecordedPlayer && masterRecordedPlayer.buffer.duration > 0) {
+          masterRecordedPlayer.start();
+          masterPlayBtn.disabled = true;
+          masterStopBtn.disabled = false;
+          masterRecordedPlayer.onstop = () => {
+            masterPlayBtn.disabled = false;
+            masterStopBtn.disabled = true;
+          };
+          showMessage("Playing master recording...");
+        } else {
+          showMessage("No master recording available.");
+        }
+      });
+
+      masterStopBtn.addEventListener("click", () => {
+        if (masterRecordedPlayer && masterRecordedPlayer.state === "started") {
+          masterRecordedPlayer.stop();
+          masterPlayBtn.disabled = false;
+          masterStopBtn.disabled = true;
+          showMessage("Master playback stopped.");
+        }
+      });
+
+      masterResetBtn.addEventListener("click", () => {
+        // Stop all players and recordings
+        Tone.Transport.stop();
+        Tone.Transport.cancel(); // Clear all scheduled events
+
+        padPlayers.forEach((player, i) => {
+          player.stop();
+          player.dispose(); // Dispose of old players
+
+          // Re-initialize players and effects for a clean slate
+          // Dispose existing effects
+          padPitchShifts[i].dispose();
+          padFeedbackDelays[i].dispose();
+          padReverbs[i].dispose();
+          padHighPassFilters[i].dispose();
+          padLowPassFilters[i].dispose();
+          padDistortions[i].dispose();
+          padVolumes[i].dispose();
+
+          // Create new ones
+          const newPlayer = new Tone.Player();
+          const newPitchShift = new Tone.PitchShift({ pitch: 0 });
+          const newHighPass = new Tone.Filter(20, "highpass");
+          const newLowPass = new Tone.Filter(20000, "lowpass");
+          const newDistortion = new Tone.Distortion(0);
+          const newFeedbackDelay = new Tone.FeedbackDelay({
+            delayTime: "8n",
+            feedback: 0,
+          });
+          const newReverb = new Tone.Reverb({ decay: 1.5, preDelay: 0.01 }).set(
+            { wet: 0 }
+          );
+          const newPadGain = new Tone.Gain(Tone.dbToGain(-6));
+
+          // Chain the new effects
+          newPlayer.chain(
+            newPitchShift,
+            newHighPass,
+            newLowPass,
+            newDistortion,
+            newFeedbackDelay,
+            newReverb,
+            newPadGain
+          );
+          newPadGain.toDestination();
+
+          // Update global arrays
+          padPlayers[i] = newPlayer;
+          padPitchShifts[i] = newPitchShift;
+          padHighPassFilters[i] = newHighPass;
+          padLowPassFilters[i] = newLowPass;
+          padDistortions[i] = newDistortion;
+          padFeedbackDelays[i] = newFeedbackDelay;
+          padReverbs[i] = newReverb;
+          padVolumes[i] = newPadGain;
+
+          // Re-generate reverb for the new instance (async, but important)
+          newReverb
+            .generate()
+            .then(() => console.log(`Reverb for pad ${i} re-generated.`));
+
+          newPlayer.onstop = () => {
+            const padButton = document.querySelector(
+              `.pad-btn[data-pad-id="${i}"]`
+            );
+            if (padButton) {
+              padButton.classList.remove("active");
+            }
+          };
+
+          padBuffers[i] = null; // Clear assigned buffer
+
+          // Reset UI for pad
+          const padButton = document.querySelector(
+            `.pad-btn[data-pad-id="${i}"]`
+          );
+          if (padButton) {
+            padButton.textContent = `Pad ${i + 1}`;
+            padButton.classList.remove("bg-blue-500", "hover:bg-blue-600");
+            padButton.classList.add("bg-green-500", "hover:bg-green-600");
+          }
+          const loopToggle = document.querySelector(
+            `.loop-toggle[data-pad-id="${i}"]`
+          );
+          if (loopToggle) loopToggle.checked = false;
+
+          const volumeSlider = document.querySelector(
+            `.volume-slider[data-pad-id="${i}"]`
+          );
+          if (volumeSlider) {
+            volumeSlider.value = -6;
+            document.getElementById(`vol${i}Value`).textContent = "-6";
+          }
+          const speedSlider = document.querySelector(
+            `.speed-slider[data-pad-id="${i}"]`
+          );
+          if (speedSlider) {
+            speedSlider.value = 1;
+            document.getElementById(`speed${i}Value`).textContent = "1.00";
+          }
+
+          // Reset new effect sliders and values
+          document.querySelector(`.pitch-slider[data-pad-id="${i}"]`).value = 0;
+          document.getElementById(`pitch${i}Value`).textContent = "0";
+          document.querySelector(`.echo-slider[data-pad-id="${i}"]`).value = 0;
+          document.getElementById(`echo${i}Value`).textContent = "0.00";
+          document.querySelector(
+            `.reverb-slider[data-pad-id="${i}"]`
+          ).value = 0;
+          document.getElementById(`reverb${i}Value`).textContent = "0.00";
+          document.querySelector(`.hp-slider[data-pad-id="${i}"]`).value = 20;
+          document.getElementById(`hp${i}Value`).textContent = "20";
+          document.querySelector(
+            `.lp-slider[data-pad-id="${i}"]`
+          ).value = 20000;
+          document.getElementById(`lp${i}Value`).textContent = "20000";
+          document.querySelector(`.dist-slider[data-pad-id="${i}"]`).value = 0;
+          document.getElementById(`dist${i}Value`).textContent = "0.00";
+
+          updatePadSpeed(i); // Apply sync state
+        });
+
+        // Reset recording section
+        recordedChunks = [];
+        recordedAudioBuffer = null;
+        trimmedAudioBuffer = null;
+        drawWaveform(null); // Clear waveform canvas
+        recordBtn.disabled = false;
+        stopRecordBtn.disabled = true;
+        playRecordedBtn.disabled = true;
+        assignToPadBtn.disabled = true;
+        trimStartInput.value = 0;
+        trimEndInput.value = 1;
+        trimStartInput.disabled = true;
+        trimEndInput.disabled = true;
+        trimStartValueSpan.textContent = "0.00";
+        trimEndValueSpan.textContent = "0.00";
+
+        // Reset master recorder
+        if (masterRecorder) {
+          masterRecorder.dispose();
+          masterRecorder = null;
+        }
+        masterRecordedBlob = null;
+        if (masterRecordedPlayer) {
+          masterRecordedPlayer.stop();
+          masterRecordedPlayer.dispose();
+          masterRecordedPlayer = null;
+        }
+        masterRecordBtn.disabled = false;
+        masterStopRecordBtn.disabled = true;
+        masterPlayBtn.disabled = true;
+        masterStopBtn.disabled = true;
+
+        // Reset global BPM
+        masterBPMInput.value = 120;
+        Tone.Transport.bpm.value = 120;
+        masterBPMValueSpan.textContent = 120;
+        masterBPMSyncToggle.checked = true; // Default to sync on
+
+        // Re-apply speed updates after reset
+        for (let i = 0; i < NUM_PADS; i++) {
+          updatePadSpeed(i);
+        }
+        showMessage("All settings and audio clips reset!");
+      });
+
+      // Initial setup of all pad audio nodes and effects
+      setupPadAudioNodes();
+
+      // Initialize audio context on first user interaction (e.g., button click)
+      // This is important for browser autoplay policies.
+      document.addEventListener("click", initializeAudio, { once: true });
+      document.addEventListener("touchstart", initializeAudio, { once: true });
+
+      // Initial setup for the waveform canvas size and event listeners
+      window.addEventListener("resize", () => {
+        const dpr = window.devicePixelRatio || 1;
+        waveformCanvas.width = waveformCanvas.offsetWidth * dpr;
+        waveformCanvas.height = waveformCanvas.offsetHeight * dpr;
+        waveformCtx.scale(dpr, dpr);
+        drawWaveform(recordedAudioBuffer, selectionStart, selectionEnd);
+      });
+
+      window.onload = () => {
+        const dpr = window.devicePixelRatio || 1;
+        waveformCanvas.width = waveformCanvas.offsetWidth * dpr;
+        waveformCanvas.height = waveformCanvas.offsetHeight * dpr;
+        waveformCtx.scale(dpr, dpr);
+        drawWaveform(null); // Initial drawing of an empty waveform
+        addWaveformEventListeners(); // Add waveform event listeners on load
+      };
+    </script>
+  </body>
+</html>
